@@ -6,7 +6,7 @@ require 'yaml'
 require File.dirname(__FILE__) + '/s3utils'
 
 #
-class S3MysqlBackup
+class S3MongoBackup
 
   def initialize(db_name, path_to_config)
     @db_name        = db_name
@@ -28,10 +28,11 @@ class S3MysqlBackup
   def config
     defaults = {
       "dump_host"           => "localhost",
+      "dump_port"           => "27017",
       "mail_domain"         => "smtp.gmail.com",
       "mail_port"           => "587",
       "mail_authentication" => :login,
-      "backup_dir"          => "~/s3_mysql_backups",
+      "backup_dir"          => "~/s3_mongo_backups",
     }
 
     if @s3config.nil?
@@ -39,7 +40,7 @@ class S3MysqlBackup
 
       # Backcompat for gmail_* keys
       @s3config.keys.each do |key|
-        @s3config[key.sub(/^gmail/, "mail")] = @s3config.delete(key)
+      @s3config[key.sub(/^gmail/, "mail")] = @s3config.delete(key)
       end
     end
     
@@ -52,9 +53,9 @@ class S3MysqlBackup
 
   # make the DB backup file
   def dump_db
-    filename  = Time.now.strftime("#{@backup_dir}/#{@db_name}.%Y%m%d.%H%M%S.sql.gz")
-    mysqldump = `which mysqldump`.to_s.strip
-    `#{mysqldump} --host='#{config['dump_host']}' --user='#{config['dump_user']}' --password='#{config['dump_pass']}' '#{@db_name}' | gzip > #{filename}`
+    filename  = Time.now.strftime("#{@backup_dir}/#{@db_name}.%Y%m%d.%H%M%S.mongodb.backup.gz")
+    mongodump = `which mongodump`.to_s.strip
+    `#{mongodump} --host='#{config['dump_host']}':'#{config['dump_port']}' --db '#{@db_name}' --out - | gzip > #{filename}`
     @s3utils.store(filename, config['remote_dir'])
     filename
   end
@@ -76,7 +77,7 @@ class S3MysqlBackup
   def mail_notification(filename)
     return unless config['mail_to']
     stats = File.stat(filename)
-    subject = "sql backup: #{@db_name}: #{human_size(stats.size)}"
+    subject = "mongodb backup: #{@db_name}: #{human_size(stats.size)}"
     mail_from = config['mail_from'] ? config['mail_from'] : config['mail_user']
 
     content = []
@@ -105,7 +106,7 @@ class S3MysqlBackup
 
     path = File.expand_path(config['backup_dir'])
 
-    Dir["#{path}/*.sql.gz"].each do |name|
+    Dir["#{path}/*.mongodb.backup.gz"].each do |name|
       date     = name.split('.')[1]
       filedate = Date.strptime(date, '%Y%m%d')
 

@@ -1,6 +1,8 @@
-require "s3_mysql_backup"
+require "s3-mongo-backup"
 require "rr"
 require 'fakefs/spec_helpers'
+require 'coveralls'
+Coveralls.wear!
 
 RSpec.configure do |config|
   config.color_enabled = true
